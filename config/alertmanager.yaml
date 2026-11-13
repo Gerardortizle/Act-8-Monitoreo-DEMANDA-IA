@@ -1,0 +1,20 @@
+route:
+  receiver: resumen-diario
+  group_by: [service, slo]
+  group_wait: 2m
+  group_interval: 10m
+  repeat_interval: 4h
+  routes:
+  - matchers: [severity="P1"]
+    receiver: pagerduty-oncall-mlops
+    continue: true
+  - matchers: [severity=~"P1|P2"]
+    receiver: slack-incidentes
+inhibit_rules:
+- source_matchers: [severity="P1"]
+  target_matchers: [severity=~"P2|P3"]
+  equal: [service]
+receivers:
+- name: pagerduty-oncall-mlops
+- name: slack-incidentes
+- name: resumen-diario

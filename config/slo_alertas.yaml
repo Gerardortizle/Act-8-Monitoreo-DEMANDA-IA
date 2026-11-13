@@ -1,0 +1,121 @@
+servicio: demanda-ia
+ventana_slo_dias: 30
+slos:
+  - id: SLO-API-DISP
+    descripcion: Solicitudes a la API de pronostico respondidas sin error 5xx
+    sli: 1 - (errores_5xx / solicitudes)
+    objetivo: 0.995
+    presupuesto_error: 0.005
+    objetivo_negocio: El ERP y los compradores pueden recalcular sugeridos de compra durante el dia
+  - id: SLO-API-LAT
+    descripcion: Solicitudes respondidas en menos de 300 ms
+    sli: solicitudes_lt_300ms / solicitudes
+    objetivo: 0.95
+    presupuesto_error: 0.05
+    objetivo_negocio: Ajustes de pedido en mostrador y en compras sin esperas
+  - id: SLO-BATCH
+    descripcion: Pronostico nocturno publicado en el ERP antes de las 05:00
+    sli: noches_a_tiempo / noches
+    objetivo: 0.967
+    presupuesto_error_noches: 1
+    objetivo_negocio: El reabasto automatico corre a las 05:00 con pronostico vigente
+  - id: SLO-CALIDAD
+    descripcion: Dias con WMAPE (SKU x sucursal) menor o igual a 32 %
+    sli: dias_wmape_ok / dias_evaluados
+    objetivo: 0.90
+    umbral_wmape: 0.32
+    presupuesto_error_dias: 3
+    objetivo_negocio: Menos quiebres de stock y menos inventario inmovilizado (caso de negocio Actividad 3)
+
+reglas:
+  - id: API-DISP-RAPIDA
+    slo: SLO-API-DISP
+    tipo: burn_rate
+    ventana_larga_min: 60
+    ventana_corta_min: 5
+    factor: 14.4
+    severidad: P1
+    runbook: RB-01
+  - id: API-DISP-LENTA
+    slo: SLO-API-DISP
+    tipo: burn_rate
+    ventana_larga_min: 360
+    ventana_corta_min: 30
+    factor: 6
+    severidad: P2
+    runbook: RB-01
+  - id: API-LAT-RAPIDA
+    slo: SLO-API-LAT
+    tipo: burn_rate
+    ventana_larga_min: 60
+    ventana_corta_min: 5
+    factor: 14.4
+    severidad: P2
+    runbook: RB-01
+  - id: API-LAT-LENTA
+    slo: SLO-API-LAT
+    tipo: burn_rate
+    ventana_larga_min: 360
+    ventana_corta_min: 30
+    factor: 6
+    severidad: P3
+    runbook: RB-01
+  - id: BATCH-RIESGO
+    slo: SLO-BATCH
+    tipo: umbral
+    condicion: fin_proyectado > 04:30
+    severidad: P2
+    runbook: RB-04
+  - id: BATCH-INCUMPLIDO
+    slo: SLO-BATCH
+    tipo: umbral
+    condicion: publicacion_erp > 05:00
+    severidad: P1
+    runbook: RB-04
+  - id: MODELO-DEGRADADO
+    slo: SLO-CALIDAD
+    tipo: umbral
+    condicion: wmape_dia > 0.38 or abs(sesgo_dia) > 0.20
+    severidad: P1
+    runbook: RB-02
+  - id: MODELO-POST-DESPLIEGUE
+    slo: SLO-CALIDAD
+    tipo: contextual
+    condicion: version desplegada hace <= 72 h and wmape_dia > 0.32 and wmape_dia > wmape_base_7d + 0.05
+    severidad: P1
+    runbook: RB-02
+  - id: MODELO-EN-RIESGO
+    slo: SLO-CALIDAD
+    tipo: umbral
+    condicion: wmape_dia > 0.32 and presupuesto_restante < 0.5
+    severidad: P2
+    runbook: RB-03
+  - id: DRIFT-DATOS
+    slo: SLO-CALIDAD
+    tipo: drift
+    condicion: pct_features_clave_psi_gt_0.2 >= 0.30 or psi(promo) > 0.25 or fuera_rango_temp > 0.20 or abs(anomalia_temp_z3) > 4
+    severidad: P2
+    runbook: RB-03
+  - id: DRIFT-VIGILANCIA
+    slo: SLO-CALIDAD
+    tipo: drift
+    condicion: max_psi entre 0.1 y 0.2 por 2 dias
+    severidad: P3
+    runbook: RB-03
+
+control_ruido:
+  agrupar_por: [servicio, slo]
+  espera_grupo_min: 2
+  repetir_cada_h: 4
+  inhibir:
+    - si_activa: P1
+      suprimir: [P2, P3]
+      mismo: [servicio]
+  silencios:
+    - motivo: despliegue programado v3
+      inicio: "2026-10-16T23:00"
+      fin: "2026-10-16T23:30"
+  enrutamiento:
+    P1: [pagerduty-oncall-mlops, slack-incidentes]
+    P2: [slack-incidentes, ticket-jira]
+    P3: [resumen-diario]

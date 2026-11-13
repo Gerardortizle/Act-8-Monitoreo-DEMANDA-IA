@@ -1,0 +1,20 @@
+# Entornos y caché de Python
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Salidas generadas al ejecutar (cada quien genera su propia evidencia)
+demanda_ia_obs/
+**/demanda_ia_obs/
+mlflow.db
+mlruns/
+mlartifacts/
+outputs/*
+!outputs/README.md
+
+# Sistema operativo y editores
+.DS_Store
+Thumbs.db
+.vscode/

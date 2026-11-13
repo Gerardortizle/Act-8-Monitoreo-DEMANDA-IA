@@ -1,0 +1,47 @@
+groups:
+- name: demanda-ia-slo-registros
+  # Proporciones precalculadas por ventana; las alertas de burn rate solo leen estas series
+  rules:
+  - record: slo:api_errores:ratio_rate5m
+    expr: sum(rate(http_requests_total{job="forecast-api",code=~"5.."}[5m])) / sum(rate(http_requests_total{job="forecast-api"}[5m]))
+  - record: slo:api_errores:ratio_rate30m
+    expr: sum(rate(http_requests_total{job="forecast-api",code=~"5.."}[30m])) / sum(rate(http_requests_total{job="forecast-api"}[30m]))
+  - record: slo:api_errores:ratio_rate1h
+    expr: sum(rate(http_requests_total{job="forecast-api",code=~"5.."}[1h])) / sum(rate(http_requests_total{job="forecast-api"}[1h]))
+  - record: slo:api_errores:ratio_rate6h
+    expr: sum(rate(http_requests_total{job="forecast-api",code=~"5.."}[6h])) / sum(rate(http_requests_total{job="forecast-api"}[6h]))
+  - record: slo:api_lentas:ratio_rate5m
+    expr: 1 - (sum(rate(http_request_duration_seconds_bucket{job="forecast-api",le="0.3"}[5m])) / sum(rate(http_request_duration_seconds_count{job="forecast-api"}[5m])))
+  - record: slo:api_lentas:ratio_rate30m
+    expr: 1 - (sum(rate(http_request_duration_seconds_bucket{job="forecast-api",le="0.3"}[30m])) / sum(rate(http_request_duration_seconds_count{job="forecast-api"}[30m])))
+  - record: slo:api_lentas:ratio_rate1h
+    expr: 1 - (sum(rate(http_request_duration_seconds_bucket{job="forecast-api",le="0.3"}[1h])) / sum(rate(http_request_duration_seconds_count{job="forecast-api"}[1h])))
+  - record: slo:api_lentas:ratio_rate6h
+    expr: 1 - (sum(rate(http_request_duration_seconds_bucket{job="forecast-api",le="0.3"}[6h])) / sum(rate(http_request_duration_seconds_count{job="forecast-api"}[6h])))
+
+- name: demanda-ia-slo-alertas
+  rules:
+  - alert: DemandaIA_API_Disponibilidad_BurnRapido
+    expr: slo:api_errores:ratio_rate1h > (14.4 * 0.005) and slo:api_errores:ratio_rate5m > (14.4 * 0.005)
+    labels: {severity: P1, slo: SLO-API-DISP, service: demanda-ia}
+    annotations:
+      summary: "La API consume el presupuesto de error 14.4 veces mas rapido de lo sostenible"
+      runbook_url: "https://wiki.fos.local/runbooks/RB-01"
+  - alert: DemandaIA_API_Disponibilidad_BurnLento
+    expr: slo:api_errores:ratio_rate6h > (6 * 0.005) and slo:api_errores:ratio_rate30m > (6 * 0.005)
+    labels: {severity: P2, slo: SLO-API-DISP, service: demanda-ia}
+    annotations:
+      summary: "Errores sostenidos: el presupuesto de disponibilidad se agotaria en 5 dias"
+      runbook_url: "https://wiki.fos.local/runbooks/RB-01"
+  - alert: DemandaIA_API_Latencia_BurnRapido
+    expr: slo:api_lentas:ratio_rate1h > (14.4 * 0.05) and slo:api_lentas:ratio_rate5m > (14.4 * 0.05)
+    labels: {severity: P2, slo: SLO-API-LAT, service: demanda-ia}
+    annotations:
+      summary: "Mas del 72 % de las solicitudes tarda mas de 300 ms"
+      runbook_url: "https://wiki.fos.local/runbooks/RB-01"
+  - alert: DemandaIA_API_Latencia_BurnLento
+    expr: slo:api_lentas:ratio_rate6h > (6 * 0.05) and slo:api_lentas:ratio_rate30m > (6 * 0.05)
+    labels: {severity: P3, slo: SLO-API-LAT, service: demanda-ia}
+    annotations:
+      summary: "Latencia degradada de forma sostenida; va al resumen diario"
+      runbook_url: "https://wiki.fos.local/runbooks/RB-01"
